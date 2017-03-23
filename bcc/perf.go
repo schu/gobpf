@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"sync"
 	"unsafe"
+
+	"github.com/iovisor/gobpf/utils"
 )
 
 /*
@@ -120,9 +122,12 @@ func InitPerfMap(table *Table, receiverChan chan []byte) (*PerfMap, error) {
 
 	readers := []*C.struct_perf_reader{}
 
-	cpu := 0
-	res := 0
-	for res == 0 {
+	cpus, err := utils.GetOnlineCPUs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine online cpus: %v", err)
+	}
+
+	for _, cpu := range cpus {
 		reader, err := C.bpf_open_perf_buffer((C.perf_reader_raw_cb)(unsafe.Pointer(C.callback_to_go)), unsafe.Pointer(uintptr(callbackDataIndex)), -1, C.int(cpu), BPF_PERF_READER_PAGE_CNT)
 		if reader == nil {
 			return nil, fmt.Errorf("failed to open perf buffer: %v", err)
@@ -138,9 +143,10 @@ func InitPerfMap(table *Table, receiverChan chan []byte) (*PerfMap, error) {
 		if r != 0 {
 			return nil, fmt.Errorf("unable to initialize perf map: %v", err)
 		}
-
-		res = int(C.bpf_get_next_key(C.int(fd), keyP, keyP))
-		cpu++
+		r = C.bpf_get_next_key(C.int(fd), keyP, keyP)
+		if r != 0 {
+			break
+		}
 	}
 	return &PerfMap{
 		table,
