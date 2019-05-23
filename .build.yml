@@ -1,0 +1,7 @@
+image: debian/testing
+source:
+  - https://github.com/iovisor/gobpf
+tasks:
+  - tests: |
+      cd gobpf
+      ./semaphore.sh
